@@ -13,6 +13,7 @@ foto / enlace / comentario ─► IA (visión) ─► atributos + recorte sin fo
 |---|---|
 | `models.py` | `Item`, `Outfit`, paleta de colores cerrada |
 | `ai.py` | `ClaudeAI` (visión + explicaciones). `FakeAI` para tests. Proveedor intercambiable (`AI` protocol) |
+| `imagegen.py` | limpieza **generativa** opcional de la foto (OpenAI Images) si hay `OPENAI_API_KEY` |
 | `imaging.py` | normaliza foto y recorta el fondo (`rembg` si está, si no recorte por esquinas) |
 | `urlfetch.py` | descarga imagen desde un enlace (foto directa u `og:image`), con protección SSRF |
 | `recommender.py` | combina arriba+abajo+calzado(+abrigo) y puntúa: colores, formalidad, temperatura, ropa sucia, uso reciente |
@@ -45,7 +46,7 @@ hub.include_router(make_router(build()), prefix="/armario")
 (`index.html` usa rutas relativas, así que funciona bajo cualquier prefijo.)
 
 ## Límites conocidos
-- La IA **analiza** la foto; no la "rehace". El recorte de fondo es procesado de imagen (rembg / flood-fill), no generativo. Para un "ghost mannequin" generativo habría que añadir un proveedor de imagen.
+- Con `OPENAI_API_KEY` la foto se rehace con un modelo generativo (solo la prenda, fondo transparente). Si falla o no hay clave, cae al recorte clásico (rembg / flood-fill). Un modelo generativo puede alterar detalles (logos, estampados): el original se conserva siempre (`image_file`) y la ficha se extrae del original, no de la versión generada.
 - Enlaces de tiendas que bloquean bots o cargan la foto con JavaScript no funcionan: en ese caso, pasa la foto.
 - `SupabaseRepo` está probado con un servidor simulado, no contra tu Supabase real.
 - El tiempo se pasa a mano (`/outfit 12°`); conectar un servicio meteorológico es una ampliación sencilla.

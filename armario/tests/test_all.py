@@ -221,3 +221,31 @@ def test_claude_ai_parses_response_with_stub_client():
     attrs = ai.analyze_image(b"x", "image/jpeg", "me queda grande")
     assert attrs.colors == ["azul marino"] and attrs.formality == 3
     assert "me queda grande" in sent["messages"][0]["content"][1]["text"]
+
+
+def test_generative_cleaner_used_then_falls_back(tmp_path):
+    import base64
+    import httpx
+    from closet.imagegen import OpenAIImageCleaner
+
+    ok = photo()
+    seen = {}
+
+    def handler(req):
+        seen["path"] = req.url.path
+        seen["body"] = req.content
+        return httpx.Response(200, json={"data": [{"b64_json": base64.b64encode(ok).decode()}]})
+
+    cleaner = OpenAIImageCleaner("k", client=httpx.Client(base_url="http://x/v1", transport=httpx.MockTransport(handler)))
+    c = Closet(SQLiteRepo(str(tmp_path / "g.db")), FakeAI(), tmp_path, cleaner)
+    it = c.add_from_photo(photo())
+    assert seen["path"] == "/v1/images/edits" and b"transparent" in seen["body"]
+    assert (tmp_path / "img" / it.clean_file).read_bytes() == ok  # usó el resultado generativo
+
+    def boom(req):
+        return httpx.Response(500)
+
+    bad = OpenAIImageCleaner("k", client=httpx.Client(base_url="http://x/v1", transport=httpx.MockTransport(boom)))
+    c2 = Closet(SQLiteRepo(str(tmp_path / "h.db")), FakeAI(), tmp_path, bad)
+    it2 = c2.add_from_photo(photo())
+    assert it2.clean_file.endswith(".png")  # cayó al recorte clásico

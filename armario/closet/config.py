@@ -17,6 +17,8 @@ class Settings:
     supabase_key: str = ""
     anthropic_key: str = ""
     model: str = "claude-sonnet-5-5"
+    openai_key: str = ""
+    image_model: str = "gpt-image-1"
     telegram_token: str = ""
     telegram_allowed: set[int] = field(default_factory=set)
     api_token: str = ""
@@ -32,6 +34,8 @@ class Settings:
             supabase_key=e.get("SUPABASE_SERVICE_KEY", ""),
             anthropic_key=e.get("ANTHROPIC_API_KEY", ""),
             model=e.get("ARMARIO_MODEL", "claude-sonnet-5-5"),
+            openai_key=e.get("OPENAI_API_KEY", ""),
+            image_model=e.get("ARMARIO_IMAGE_MODEL", "gpt-image-1"),
             telegram_token=e.get("TELEGRAM_BOT_TOKEN", ""),
             telegram_allowed=_ids(e.get("TELEGRAM_ALLOWED_IDS", "")),
             api_token=e.get("ARMARIO_API_TOKEN", ""),

@@ -1,6 +1,7 @@
 """Lógica de negocio. Telegram y la web llaman solo a esto."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from . import imaging, recommender, urlfetch
@@ -15,8 +16,8 @@ class NotFound(LookupError):
 
 
 class Closet:
-    def __init__(self, repo: Repo, ai: AI, data_dir: Path):
-        self.repo, self.ai = repo, ai
+    def __init__(self, repo: Repo, ai: AI, data_dir: Path, cleaner: Callable[[bytes], bytes] | None = None):
+        self.repo, self.ai, self.cleaner = repo, ai, cleaner
         self.img_dir = Path(data_dir) / "img"
         self.img_dir.mkdir(parents=True, exist_ok=True)
 
@@ -40,12 +41,22 @@ class Closet:
         item = Item(**attrs.model_dump(), source_url=source_url)
         (self.img_dir / f"{item.id}.jpg").write_bytes(jpg)
         item.image_file = f"{item.id}.jpg"
-        try:
-            (self.img_dir / f"{item.id}.png").write_bytes(imaging.remove_background(jpg))
-            item.clean_file = f"{item.id}.png"
-        except Exception:  # el recorte es opcional: la prenda se guarda igual
-            item.clean_file = ""
+        item.clean_file = self._clean(item.id, jpg)
         return self.repo.add_item(item)
+
+    def _clean(self, id_: str, jpg: bytes) -> str:
+        """Generativo si hay proveedor; si falla, recorte clásico; si falla, sin recorte."""
+        for fn in (self.cleaner, imaging.remove_background):
+            if fn is None:
+                continue
+            try:
+                png = fn(jpg)
+                imaging.load(png)  # valida que lo devuelto es una imagen
+                (self.img_dir / f"{id_}.png").write_bytes(png)
+                return f"{id_}.png"
+            except Exception:
+                continue
+        return ""
 
     def add_from_url(self, url: str, comment: str = "") -> Item:
         data, hint = urlfetch.fetch_image(url)
@@ -119,4 +130,7 @@ def build(settings: Settings | None = None, ai: AI | None = None, repo: Repo | N
     s.data_dir.mkdir(parents=True, exist_ok=True)
     if repo is None:
         repo = SupabaseRepo(s.supabase_url, s.supabase_key) if s.supabase_url else SQLiteRepo(str(s.db_path))
-    return Closet(repo, ai or ClaudeAI(s.anthropic_key, s.model), s.data_dir)
+    from .imagegen import OpenAIImageCleaner
+
+    cleaner = OpenAIImageCleaner(s.openai_key, s.image_model) if s.openai_key else None
+    return Closet(repo, ai or ClaudeAI(s.anthropic_key, s.model), s.data_dir, cleaner)

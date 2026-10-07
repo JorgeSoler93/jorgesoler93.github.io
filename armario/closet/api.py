@@ -1,6 +1,7 @@
 """API REST + web app. `router` se puede incluir en tu hub; `create_app` la sirve sola."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -8,7 +9,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from . import imaging, urlfetch
-from .models import Item, Outfit
+from .models import COLORS, SEASONS, Item, ItemAttributes, Outfit
 from .service import Closet, NotFound, build
 
 WEB = Path(__file__).parent / "web"
@@ -62,9 +63,19 @@ def make_router(closet: Closet, api_token: str = "") -> APIRouter:
     def list_items(category: str | None = None) -> list[Item]:
         return closet.list_items(category)
 
+    @r.get("/api/schema")
+    def schema() -> dict:
+        """Para agentes: qué atributos acepta POST /api/items y con qué valores."""
+        return {"attributes": ItemAttributes.model_json_schema(), "colors": COLORS, "seasons": SEASONS}
+
     @r.post("/api/items")
-    def add_item(photo: UploadFile = File(...), comment: str = Form("")) -> Item:
-        return guard(closet.add_from_photo, photo.file.read(), comment)
+    def add_item(photo: UploadFile = File(...), comment: str = Form(""), attributes: str = Form("")) -> Item:
+        """`attributes`: JSON opcional con los atributos ya decididos (si trae name y category, no se usa IA)."""
+        try:
+            attrs = json.loads(attributes) if attributes.strip() else None
+        except ValueError:
+            raise HTTPException(400, "attributes no es JSON válido")
+        return guard(closet.add_from_photo, photo.file.read(), comment, "", attrs)
 
     @r.post("/api/items/from-url")
     def add_from_url(body: FromUrl) -> Item:

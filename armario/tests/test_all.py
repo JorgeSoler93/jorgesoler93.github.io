@@ -249,3 +249,56 @@ def test_generative_cleaner_used_then_falls_back(tmp_path):
     c2 = Closet(SQLiteRepo(str(tmp_path / "h.db")), FakeAI(), tmp_path, bad)
     it2 = c2.add_from_photo(photo())
     assert it2.clean_file.endswith(".png")  # cayó al recorte clásico
+
+
+# ---------- sin IA externa / imágenes ya limpias ----------
+def rgba_png(color=(40, 90, 190)) -> bytes:
+    img = Image.new("RGBA", (100, 100), (0, 0, 0, 0))
+    img.paste(Image.new("RGBA", (50, 50), (*color, 255)), (25, 25))
+    buf = io.BytesIO(); img.save(buf, "PNG")
+    return buf.getvalue()
+
+
+@pytest.fixture
+def noai(tmp_path):
+    from closet.ai import HeuristicAI
+    return Closet(SQLiteRepo(str(tmp_path / "n.db")), HeuristicAI(), tmp_path)
+
+
+def test_prelean_png_kept_and_color_detected_without_ai(noai):
+    it = noai.add_from_photo(rgba_png((25, 35, 80)), "camiseta del gimnasio", attrs={"category": "top"})
+    assert it.colors == ["azul marino"] and it.name == "camiseta del gimnasio"
+    kept = Image.open(noai.image_path(it.id))
+    assert kept.mode == "RGBA" and kept.size == (50, 50)  # no se re-recorta ni se aplana
+    jpg = Image.open(noai.image_path(it.id, clean=False))
+    assert jpg.getpixel((2, 2))[0] > 240  # transparencia aplanada en blanco, no en negro
+
+
+def test_attrs_from_agent_skip_ai(tmp_path):
+    ai = FakeAI()
+    c = Closet(SQLiteRepo(str(tmp_path / "a.db")), ai, tmp_path)
+    it = c.add_from_photo(photo(), attrs={"name": "Chaqueta", "category": "outerwear", "colors": ["negro"], "warmth": 4})
+    assert ai.calls == [] and it.warmth == 4 and it.category == "outerwear"
+
+
+def test_api_accepts_agent_attributes_and_schema(noai):
+    c = client(noai)
+    r = c.post("/api/items", files={"photo": ("a.png", rgba_png(), "image/png")},
+               data={"attributes": '{"name":"Polo","category":"top","formality":3}'})
+    assert r.status_code == 200 and r.json()["formality"] == 3
+    assert c.post("/api/items", files={"photo": ("a.png", rgba_png(), "image/png")}, data={"attributes": "{mal"}).status_code == 400
+    sch = c.get("/api/schema").json()
+    assert "azul marino" in sch["colors"] and "category" in sch["attributes"]["properties"]
+
+
+def test_import_folder(noai, tmp_path):
+    from closet.importer import import_folder
+    root = tmp_path / "fotos"
+    (root / "top").mkdir(parents=True); (root / "calzado").mkdir(); (root / "raro").mkdir()
+    (root / "top" / "camiseta-blanca.png").write_bytes(rgba_png((240, 240, 240)))
+    (root / "calzado" / "zapatillas_rojas.png").write_bytes(rgba_png((200, 35, 40)))
+    (root / "raro" / "x.png").write_bytes(rgba_png())
+    done, errors = import_folder(noai, root)
+    assert {(i.name, i.category, tuple(i.colors)) for i in done} == {
+        ("Camiseta blanca", "top", ("blanco",)), ("Zapatillas rojas", "shoes", ("rojo",))}
+    assert len(errors) == 1 and "raro" in errors[0]

@@ -85,3 +85,14 @@ class FakeAI:
 
     def explain_outfits(self, outfits: list[dict], context: str) -> list[str]:
         return [f"Conjunto {i + 1}" for i in range(len(outfits))]
+
+
+class HeuristicAI:
+    """Sin IA externa: el nombre sale del comentario y el color se calcula de los píxeles (en el servicio).
+    La categoría y el resto de atributos los aporta quien llama (agente, carpeta, web) o se corrigen a mano."""
+
+    def analyze_image(self, image: bytes, media_type: str, comment: str = "") -> ItemAttributes:
+        return ItemAttributes(name=comment.strip()[:60] or "Prenda", notes=comment.strip())
+
+    def explain_outfits(self, outfits: list[dict], context: str) -> list[str]:
+        return []  # el servicio usa entonces los motivos del recomendador

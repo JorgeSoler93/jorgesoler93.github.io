@@ -7,7 +7,7 @@ from pathlib import Path
 from . import imaging, recommender, urlfetch
 from .ai import AI
 from .config import Settings
-from .models import Item, Outfit, now_iso
+from .models import Item, ItemAttributes, Outfit, now_iso
 from .repo import Repo
 
 
@@ -35,13 +35,27 @@ class Closet:
         return m[0]
 
     # -- prendas --
-    def add_from_photo(self, data: bytes, comment: str = "", source_url: str = "") -> Item:
+    def add_from_photo(self, data: bytes, comment: str = "", source_url: str = "", attrs: dict | None = None) -> Item:
+        """`attrs`: atributos ya conocidos (los pone el agente/ChatGPT, o una carpeta). Si traen name y
+        category completos no se llama a ninguna IA. Si la imagen ya trae transparencia, se usa tal cual."""
+        img = imaging.load(data)
         jpg = imaging.normalize(data)
-        attrs = self.ai.analyze_image(jpg, "image/jpeg", comment)
-        item = Item(**attrs.model_dump(), source_url=source_url)
+        attrs = attrs or {}
+        if {"name", "category"} <= attrs.keys():
+            base = ItemAttributes.model_validate(attrs)
+        else:
+            base = ItemAttributes.model_validate({**self.ai.analyze_image(jpg, "image/jpeg", comment).model_dump(), **attrs})
+        item = Item(**base.model_dump(), source_url=source_url)
         (self.img_dir / f"{item.id}.jpg").write_bytes(jpg)
         item.image_file = f"{item.id}.jpg"
-        item.clean_file = self._clean(item.id, jpg)
+        if imaging.has_alpha(img):
+            (self.img_dir / f"{item.id}.png").write_bytes(imaging.to_png(data))
+            item.clean_file = f"{item.id}.png"
+        else:
+            item.clean_file = self._clean(item.id, jpg)
+        if not item.colors:
+            src = (self.img_dir / item.clean_file).read_bytes() if item.clean_file else jpg
+            item.colors = [c for c in [imaging.dominant_color(src)] if c]
         return self.repo.add_item(item)
 
     def _clean(self, id_: str, jpg: bytes) -> str:
@@ -123,7 +137,7 @@ class Closet:
 
 
 def build(settings: Settings | None = None, ai: AI | None = None, repo: Repo | None = None) -> Closet:
-    from .ai import ClaudeAI
+    from .ai import ClaudeAI, HeuristicAI
     from .repo import SQLiteRepo, SupabaseRepo
 
     s = settings or Settings.from_env()
@@ -133,4 +147,5 @@ def build(settings: Settings | None = None, ai: AI | None = None, repo: Repo | N
     from .imagegen import OpenAIImageCleaner
 
     cleaner = OpenAIImageCleaner(s.openai_key, s.image_model) if s.openai_key else None
-    return Closet(repo, ai or ClaudeAI(s.anthropic_key, s.model), s.data_dir, cleaner)
+    ai = ai or (ClaudeAI(s.anthropic_key, s.model) if s.anthropic_key else HeuristicAI())
+    return Closet(repo, ai, s.data_dir, cleaner)

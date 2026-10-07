@@ -23,6 +23,9 @@ foto / enlace / comentario ─► IA (visión) ─► atributos + recorte sin fo
 | `telegram_bot.py` | comandos y handlers de foto/enlace |
 | `web/index.html` | UI móvil (armario, añadir, conjuntos) |
 
+## Sin IA propia (modo agente)
+Si no hay `ANTHROPIC_API_KEY`, la app usa `HeuristicAI`: el color se calcula de los píxeles y el resto de atributos los pasa quien llama (`attributes` en `POST /api/items`, descritos en `GET /api/schema`) o una carpeta (`python -m closet import ./fotos`). Así el cerebro es tu agente. Cómo preparar las fotos: `PROMPT_FOTOS.md`.
+
 ## Arrancar
 ```bash
 pip install -r requirements.txt
@@ -30,7 +33,7 @@ cp .env.example .env   # rellena claves
 export $(grep -v '^#' .env | xargs)
 python -m closet web 8085   # web + API
 python -m closet bot        # Telegram
-pytest                      # 22 tests, sin red ni claves
+pytest                      # 27 tests, sin red ni claves
 ```
 Sin `SUPABASE_URL` usa SQLite en `./data`. Para Supabase: ejecuta `supabase/migrations/001_armario.sql`.
 

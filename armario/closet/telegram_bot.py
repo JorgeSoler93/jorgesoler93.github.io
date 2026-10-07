@@ -8,7 +8,7 @@ from .models import Item, Outfit, short
 from .service import Closet, NotFound
 
 HELP = """👔 *Armario*
-📸 Manda una *foto* de una prenda (el pie de foto es tu comentario: «me queda grande», «para verano»…)
+📸 Manda una *foto* (o «como archivo» si ya está recortada) de una prenda (el pie de foto es tu comentario: «me queda grande», «para verano»…)
 🔗 Manda un *enlace* de una prenda o de una foto
 /armario [categoría] – lista (top, bottom, shoes, outerwear, dress, accessory)
 /outfit [ocasión] [20°] [comentario] – te propongo conjuntos
@@ -71,6 +71,12 @@ def run(closet: Closet, token: str, allowed: set[int]) -> None:  # pragma: no co
         item = await asyncio.to_thread(closet.add_from_photo, data, u.message.caption or "")
         await reply(u, "✅ Guardada:\n" + fmt_item(item))
 
+    async def document(u, c):  # "enviar como archivo": no comprime y conserva la transparencia
+        f = await u.message.document.get_file()
+        data = bytes(await f.download_as_bytearray())
+        item = await asyncio.to_thread(closet.add_from_photo, data, u.message.caption or "")
+        await reply(u, "✅ Guardada:\n" + fmt_item(item))
+
     async def text(u, c):
         m = URL_RE.search(u.message.text)
         if not m:
@@ -117,5 +123,6 @@ def run(closet: Closet, token: str, allowed: set[int]) -> None:  # pragma: no co
                      ("nota", nota), ("sucia", status("dirty")), ("limpia", status("clean")), ("borrar", borrar), ("ver", ver)]:
         app.add_handler(CommandHandler(name, safe(fn), filters=ok))
     app.add_handler(MessageHandler(ok & filters.PHOTO, safe(photo)))
+    app.add_handler(MessageHandler(ok & filters.Document.IMAGE, safe(document)))
     app.add_handler(MessageHandler(ok & filters.TEXT & ~filters.COMMAND, safe(text)))
     app.run_polling()

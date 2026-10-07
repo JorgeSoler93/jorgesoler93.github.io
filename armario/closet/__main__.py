@@ -19,8 +19,15 @@ def main() -> None:
         from .api import create_app
 
         uvicorn.run(create_app(closet), host="0.0.0.0", port=int(sys.argv[2]) if len(sys.argv) > 2 else 8085)
+    elif mode == "import":
+        from .importer import import_folder
+
+        done, errors = import_folder(closet, sys.argv[2])
+        print(f"{len(done)} prendas importadas")
+        for e in errors:
+            print("⚠️", e)
     else:
-        sys.exit("uso: python -m closet [web [puerto]|bot]")
+        sys.exit("uso: python -m closet [web [puerto]|bot|import CARPETA]")
 
 
 if __name__ == "__main__":

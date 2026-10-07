@@ -1,0 +1,51 @@
+# Armario 👔
+
+Catálogo de tu ropa + recomendador de conjuntos. Se usa por **Telegram** y como **web app** (para el hub).
+
+```
+foto / enlace / comentario ─► IA (visión) ─► atributos + recorte sin fondo ─► BD
+                                                         │
+ /outfit trabajo 12° ─► recomendador (reglas) ─► IA explica ─► conjuntos
+```
+
+## Piezas (`closet/`)
+| Archivo | Qué hace |
+|---|---|
+| `models.py` | `Item`, `Outfit`, paleta de colores cerrada |
+| `ai.py` | `ClaudeAI` (visión + explicaciones). `FakeAI` para tests. Proveedor intercambiable (`AI` protocol) |
+| `imaging.py` | normaliza foto y recorta el fondo (`rembg` si está, si no recorte por esquinas) |
+| `urlfetch.py` | descarga imagen desde un enlace (foto directa u `og:image`), con protección SSRF |
+| `recommender.py` | combina arriba+abajo+calzado(+abrigo) y puntúa: colores, formalidad, temperatura, ropa sucia, uso reciente |
+| `repo.py` | `SQLiteRepo` (dev) y `SupabaseRepo` (PostgREST) con la misma interfaz |
+| `service.py` | lógica de negocio; Telegram y web solo llaman aquí |
+| `api.py` | `make_router(closet)` → se monta en tu hub; `create_app` la sirve sola |
+| `telegram_bot.py` | comandos y handlers de foto/enlace |
+| `web/index.html` | UI móvil (armario, añadir, conjuntos) |
+
+## Arrancar
+```bash
+pip install -r requirements.txt
+cp .env.example .env   # rellena claves
+export $(grep -v '^#' .env | xargs)
+python -m closet web 8085   # web + API
+python -m closet bot        # Telegram
+pytest                      # 22 tests, sin red ni claves
+```
+Sin `SUPABASE_URL` usa SQLite en `./data`. Para Supabase: ejecuta `supabase/migrations/001_armario.sql`.
+
+## Comandos de Telegram
+Foto (pie de foto = comentario) · enlace · `/armario [cat]` · `/outfit [ocasión] [20°] [comentario]` · `/uso id` · `/nota id 1-5` · `/sucia id` · `/limpia id` · `/borrar id` · `/ver id`
+
+## Meterlo en el hub (FastAPI)
+```python
+from closet.service import build
+from closet.api import make_router
+hub.include_router(make_router(build()), prefix="/armario")
+```
+(`index.html` usa rutas relativas, así que funciona bajo cualquier prefijo.)
+
+## Límites conocidos
+- La IA **analiza** la foto; no la "rehace". El recorte de fondo es procesado de imagen (rembg / flood-fill), no generativo. Para un "ghost mannequin" generativo habría que añadir un proveedor de imagen.
+- Enlaces de tiendas que bloquean bots o cargan la foto con JavaScript no funcionan: en ese caso, pasa la foto.
+- `SupabaseRepo` está probado con un servidor simulado, no contra tu Supabase real.
+- El tiempo se pasa a mano (`/outfit 12°`); conectar un servicio meteorológico es una ampliación sencilla.

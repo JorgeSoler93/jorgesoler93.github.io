@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Armario</title>
+<style>
+:root{--bg:#f6f5f2;--fg:#1d1d1f;--card:#fff;--mut:#6b6b70;--acc:#2f5d50;--bd:#e3e1dc}
+@media (prefers-color-scheme:dark){:root{--bg:#161616;--fg:#eee;--card:#222;--mut:#9a9a9f;--acc:#6fb39d;--bd:#333}}
+*{box-sizing:border-box}body{margin:0;font:16px system-ui,sans-serif;background:var(--bg);color:var(--fg)}
+header{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--bd);display:flex;gap:4px;padding:8px 16px;z-index:2}
+header button{flex:1;padding:10px;border:0;border-radius:10px;background:none;color:var(--mut);font-size:15px}
+header button.on{background:var(--acc);color:#fff}
+main{padding:16px;max-width:900px;margin:auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:8px;font-size:14px}
+.card img{width:100%;aspect-ratio:1;object-fit:contain;border-radius:8px;background:repeating-conic-gradient(#8881 0 25%,#0000 0 50%) 0 0/16px 16px}
+.mut{color:var(--mut);font-size:13px}.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+input,select,textarea,button.p{font:inherit;padding:10px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--fg)}
+button.p{background:var(--acc);color:#fff;border:0}.outfit{display:flex;gap:8px;overflow-x:auto}.outfit .card{min-width:120px;flex:0 0 120px}
+.dirty{opacity:.5}h2{font-size:18px;margin:20px 0 8px}
+</style>
+</head>
+<body>
+<header><button id="t-closet" class="on">Armario</button><button id="t-add">Añadir</button><button id="t-out">Conjuntos</button></header>
+<main>
+<section id="v-closet"><div class="row"><select id="cat"><option value="">Todo</option><option value="top">Arriba</option><option value="bottom">Abajo</option><option value="dress">Vestidos</option><option value="shoes">Calzado</option><option value="outerwear">Abrigo</option><option value="accessory">Accesorios</option></select></div><div id="grid" class="grid"></div></section>
+<section id="v-add" hidden>
+  <h2>Foto de la prenda</h2>
+  <div class="row"><input id="photo" type="file" accept="image/*" capture="environment"></div>
+  <div class="row"><textarea id="c1" rows="2" style="flex:1" placeholder="Comentario (talla, ocasión, defectos…)"></textarea></div>
+  <button class="p" id="b-photo">Guardar prenda</button>
+  <h2>O un enlace</h2>
+  <div class="row"><input id="url" style="flex:1" placeholder="https://… (foto o página de producto)"></div>
+  <button class="p" id="b-url">Guardar desde enlace</button>
+  <p id="msg" class="mut"></p>
+</section>
+<section id="v-out" hidden>
+  <div class="row"><input id="occ" placeholder="Ocasión (trabajo, cita, casual…)" style="flex:1"><input id="temp" type="number" placeholder="°C" style="width:90px"></div>
+  <div class="row"><input id="c2" placeholder="Comentario opcional" style="flex:1"><button class="p" id="b-out">Proponer</button></div>
+  <div id="outs"></div>
+</section>
+</main>
+<script>
+const $=s=>document.querySelector(s), q=new URLSearchParams(location.search), T=q.get('token')||localStorage.getItem('armario_token')||'';
+if(q.get('token'))localStorage.setItem('armario_token',T);
+const H=T?{Authorization:'Bearer '+T}:{}, tk=T?'&token='+encodeURIComponent(T):'';
+const img=i=>`api/items/${i.id}/image?v=${i.id}${tk}`;
+async function api(p,o={}){const r=await fetch(p,{...o,headers:{...H,...(o.headers||{})}});if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||r.status);return r.json()}
+const card=i=>`<div class="card ${i.status=='dirty'?'dirty':''}"><img loading="lazy" src="${img(i)}"><b>${esc(i.name)}</b><div class="mut">${esc(i.colors.join(', '))}</div></div>`;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function load(){const items=await api('api/items'+($('#cat').value?'?category='+$('#cat').value:''));$('#grid').innerHTML=items.map(card).join('')||'<p class="mut">Aún no hay prendas.</p>'}
+function tab(n){for(const k of['closet','add','out']){$('#v-'+k).hidden=k!=n;$('#t-'+k).classList.toggle('on',k==n)}if(n=='closet')load()}
+for(const k of['closet','add','out'])$('#t-'+k).onclick=()=>tab(k);$('#cat').onchange=load;
+async function busy(btn,fn){btn.disabled=true;$('#msg').textContent='Analizando… ⏳';try{const i=await fn();$('#msg').textContent='✅ Guardada: '+i.name}catch(e){$('#msg').textContent='⚠️ '+e.message}btn.disabled=false}
+$('#b-photo').onclick=e=>{const f=$('#photo').files[0];if(!f)return;const fd=new FormData();fd.append('photo',f);fd.append('comment',$('#c1').value);busy(e.target,()=>api('api/items',{method:'POST',body:fd}))};
+$('#b-url').onclick=e=>busy(e.target,()=>api('api/items/from-url',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:$('#url').value,comment:$('#c1').value})}));
+$('#b-out').onclick=async e=>{e.target.disabled=true;try{const outs=await api('api/outfits/recommend',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({occasion:$('#occ').value,temp_c:$('#temp').value?+$('#temp').value:null,comment:$('#c2').value})});
+$('#outs').innerHTML=outs.map(o=>`<h2>${esc(o.explanation)}</h2><div class="outfit">${o.items.map(card).join('')}</div><div class="row"><button class="p" data-w="${o.id}">Me lo pongo</button></div>`).join('')||'<p class="mut">Necesito prendas limpias de arriba y de abajo.</p>';
+document.querySelectorAll('[data-w]').forEach(b=>b.onclick=async()=>{await api(`api/outfits/${b.dataset.w}/wear`,{method:'POST'});b.textContent='✓ Anotado';b.disabled=true})}catch(err){$('#outs').textContent='⚠️ '+err.message}e.target.disabled=false};
+load();
+</script>
+</body>
+</html>

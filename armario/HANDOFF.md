@@ -29,10 +29,9 @@ y pídeme confirmación antes de ejecutarlo. No toques ninguna tabla existente.
 PASO 3 — Configuración: crea `.env` a partir de `.env.example` con SUPABASE_URL, SUPABASE_SERVICE_KEY,
 ANTHROPIC_API_KEY (o dime qué proveedor de IA uso ya y adapta `closet/ai.py` implementando el protocolo `AI`
 con `analyze_image` y `explain_outfits`), TELEGRAM_BOT_TOKEN y TELEGRAM_ALLOWED_IDS (solo mi user id).
-Para la limpieza generativa de fotos, comprueba si ya tengo conectado OpenAI en este agente y con qué tipo de acceso
-(clave de API o solo suscripción de ChatGPT): el endpoint de imágenes necesita clave de API con facturación. Si solo hay
-suscripción, deja `OPENAI_API_KEY` vacío (usará el recorte clásico) y dímelo. Confirma el nombre vigente del modelo de
-imagen y ajusta `ARMARIO_IMAGE_MODEL`.
+NO uses la API de OpenAI ni ninguna API de imágenes de pago: deja `OPENAI_API_KEY` sin definir. Para recortar el fondo
+de las fotos instala `rembg[cpu]` en el venv (corre en local y gratis; descarga un modelo ONNX la primera vez).
+Verifica con una foto de prueba que el recorte funciona y dime cuánto tarda en este mini PC.
 Pídeme los secretos; no los inventes ni los subas a git.
 
 PASO 4 — Integración:
@@ -57,5 +56,4 @@ tiempo automático por geolocalización, y que Aura/otras apps puedan leer mi ar
 ## Qué necesitas tener a mano
 - Token del bot de Telegram (BotFather) y tu user id numérico.
 - Clave de IA con visión (por defecto Anthropic).
-- (Opcional) `OPENAI_API_KEY` de la API de OpenAI para la limpieza generativa de fotos.
 - URL y service key de tu Supabase local.

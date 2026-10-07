@@ -46,7 +46,7 @@ hub.include_router(make_router(build()), prefix="/armario")
 (`index.html` usa rutas relativas, así que funciona bajo cualquier prefijo.)
 
 ## Límites conocidos
-- Con `OPENAI_API_KEY` la foto se rehace con un modelo generativo (solo la prenda, fondo transparente). Si falla o no hay clave, cae al recorte clásico (rembg / flood-fill). Un modelo generativo puede alterar detalles (logos, estampados): el original se conserva siempre (`image_file`) y la ficha se extrae del original, no de la versión generada.
+- Por defecto no sale ninguna foto del equipo: recorte local (`rembg` si lo instalas, gratis; si no, recorte simple). Opcional y de pago: con `OPENAI_API_KEY` la foto se rehace con un modelo generativo (solo la prenda, fondo transparente). Si falla o no hay clave, cae al recorte clásico (rembg / flood-fill). Un modelo generativo puede alterar detalles (logos, estampados): el original se conserva siempre (`image_file`) y la ficha se extrae del original, no de la versión generada.
 - Enlaces de tiendas que bloquean bots o cargan la foto con JavaScript no funcionan: en ese caso, pasa la foto.
 - `SupabaseRepo` está probado con un servidor simulado, no contra tu Supabase real.
 - El tiempo se pasa a mano (`/outfit 12°`); conectar un servicio meteorológico es una ampliación sencilla.
